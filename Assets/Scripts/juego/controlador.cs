@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Networking;
+using SimpleJSON;
 
 public class controlador : MonoBehaviour
 {
@@ -8,8 +10,12 @@ public class controlador : MonoBehaviour
     private GameObject[,] game_cells = new GameObject[3,3];
     public int current_player = 1;
     private int[] win = {0,0};
+    public float timer = 5f;
+    private int wins = 0;
+
     void Start()
-    {
+    {   
+        Debug.Log(GetText());
         restart();
     }
 
@@ -28,6 +34,18 @@ public class controlador : MonoBehaviour
         Validation();
         gameObject.GetComponent<gui>().setMarcador("Marcador: "+win[0]+" - "+win[1]);
         gameObject.GetComponent<gui>().setCurrentPlayer("Jugador: "+((current_player==1)? 1:2));
+        timer = timer - Time.deltaTime;
+        timer = (timer<0)? 0: timer;
+        if (timer == 0){
+            gameObject.GetComponent<gui>().setWinner("");
+        }
+        if (wins ==3){
+            StartCoroutine(Send());
+            StartCoroutine(GetText());
+            wins = 0;
+            win[0]=0;
+            win[1]=0;
+        }
     }
 
     void Validation(){
@@ -47,22 +65,44 @@ public class controlador : MonoBehaviour
         }
         int sumd1=0;
         int sumd2=0;
+        int ganador = 0;
         for (int i=0;i<3;i++){
             sumd1+=game_cells[i,i].GetComponent<celda>().state;
             sumd2+=game_cells[2-i,i].GetComponent<celda>().state;
             }
         if (sumh==3 || sumv==3 || sumd1==3 || sumd2==3){
             win[0]+=1;
+            ganador = 1;
             restart();
         }else if (sumh==-3 || sumv==-3 || sumd1==-3 || sumd2==-3){
             win[1]+=1;
+            ganador = 2;
             restart();
         }else if (!active_cells){
             restart();
+            ganador = 3;
+        }
+        if (ganador != 0){
+            gameObject.GetComponent<gui>().setWinner((ganador ==3)? "Empate":("Ganador: " + ((ganador ==1)? "X":"O")));
+            wins += 1;
         }
     }
-    
+
     public void Change(){
         current_player*=-1;
+    }
+
+    IEnumerator GetText() {
+        using (UnityWebRequest www = UnityWebRequest.Get("http://localhost:8000/")) {
+            yield return www.SendWebRequest();
+            string data = www.downloadHandler.text;
+            gameObject.GetComponent<gui>().setFetched(data);
+        }
+    }
+
+    IEnumerator Send() {
+        using (UnityWebRequest www = UnityWebRequest.Post("http://localhost:8000/"+win[0]+"/"+win[1],"{ \"field1\": 1, \"field2\": 2 }", "application/json")) {
+            yield return www.SendWebRequest();
+        }
     }
 }
